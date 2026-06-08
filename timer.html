@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guitar Practice Timer</title>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    max-width: 500px;
+    margin: auto;
+    padding: 20px;
+    text-align: center;
+}
+
+textarea {
+    width: 100%;
+    height: 180px;
+    font-size: 16px;
+}
+
+#step {
+    font-size: 32px;
+    font-weight: bold;
+    margin-top: 20px;
+}
+
+#timer {
+    font-size: 64px;
+    margin: 20px 0;
+}
+
+button {
+    padding: 12px 20px;
+    margin: 5px;
+    font-size: 16px;
+}
+
+#next {
+    color: #666;
+}
+</style>
+</head>
+
+<body>
+
+<h2>🎸 Guitar Practice Timer</h2>
+
+<p>Format: Step Name, Seconds</p>
+
+<textarea id="routine"></textarea>
+
+<br>
+
+<button onclick="saveRoutine()">Save</button>
+<button onclick="loadRoutine()">Load</button>
+
+<div id="step">Ready</div>
+<div id="timer">00:00</div>
+<div id="next"></div>
+
+<button onclick="start()">Start</button>
+<button onclick="pause()">Pause</button>
+<button onclick="resetTimer()">Reset</button>
+
+<script>
+const defaultRoutine = `D Chord,60
+Break,30
+A Chord,60
+Break,30
+E Chord,60
+Break,30
+Chord Changes,120
+Break,30
+Strumming Practice,180
+Song Practice,600`;
+
+const routineBox = document.getElementById("routine");
+const stepEl = document.getElementById("step");
+const timerEl = document.getElementById("timer");
+const nextEl = document.getElementById("next");
+
+routineBox.value =
+localStorage.getItem("guitarRoutine") || defaultRoutine;
+
+let steps = [];
+let currentStep = 0;
+let remaining = 0;
+let interval = null;
+let running = false;
+
+function saveRoutine() {
+    localStorage.setItem(
+        "guitarRoutine",
+        routineBox.value
+    );
+    alert("Saved");
+}
+
+function loadRoutine() {
+    routineBox.value =
+        localStorage.getItem("guitarRoutine")
+        || defaultRoutine;
+}
+
+function parseRoutine() {
+    return routineBox.value
+        .split("\n")
+        .filter(x => x.trim())
+        .map(line => {
+            const [name, secs] = line.split(",");
+            return {
+                name: name.trim(),
+                duration: parseInt(secs.trim())
+            };
+        });
+}
+
+function formatTime(s) {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return String(m).padStart(2,"0") +
+        ":" +
+        String(sec).padStart(2,"0");
+}
+
+function speak(text) {
+    speechSynthesis.cancel();
+    speechSynthesis.speak(
+        new SpeechSynthesisUtterance(text)
+    );
+}
+
+function beep() {
+    const ctx = new (window.AudioContext ||
+        window.webkitAudioContext)();
+
+    const osc = ctx.createOscillator();
+    osc.connect(ctx.destination);
+    osc.frequency.value = 800;
+
+    osc.start();
+
+    setTimeout(() => {
+        osc.stop();
+        ctx.close();
+    }, 200);
+}
+
+function showStep() {
+    if (currentStep >= steps.length) {
+        stepEl.textContent = "Finished 🎉";
+        timerEl.textContent = "00:00";
+        nextEl.textContent = "";
+        running = false;
+        clearInterval(interval);
+        beep();
+        speak("Practice complete");
+        return;
+    }
+
+    const step = steps[currentStep];
+
+    stepEl.textContent = step.name;
+    timerEl.textContent = formatTime(remaining);
+
+    if (currentStep + 1 < steps.length) {
+        nextEl.textContent =
+            "Next: " +
+            steps[currentStep + 1].name;
+    } else {
+        nextEl.textContent =
+            "Next: Finish";
+    }
+}
+
+function start() {
+    if (running) return;
+
+    if (steps.length === 0) {
+        steps = parseRoutine();
+    }
+
+    if (remaining === 0) {
+        remaining = steps[currentStep].duration;
+        showStep();
+        speak(steps[currentStep].name);
+    }
+
+    running = true;
+
+    interval = setInterval(() => {
+
+        remaining--;
+
+        timerEl.textContent =
+            formatTime(remaining);
+
+        if (remaining <= 0) {
+
+            beep();
+
+            currentStep++;
+
+            if (currentStep >= steps.length) {
+                showStep();
+                return;
+            }
+
+            remaining =
+                steps[currentStep].duration;
+
+            speak(steps[currentStep].name);
+
+            showStep();
+        }
+
+    }, 1000);
+}
+
+function pause() {
+    running = false;
+    clearInterval(interval);
+}
+
+function resetTimer() {
+    pause();
+
+    steps = parseRoutine();
+
+    currentStep = 0;
+    remaining = steps[0]?.duration || 0;
+
+    showStep();
+}
+
+resetTimer();
+</script>
+
+</body>
+</html>
